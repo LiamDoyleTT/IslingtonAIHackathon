@@ -7,6 +7,11 @@ from api.search.search_handler import SearchHandler
 import json
 from types import SimpleNamespace
 
+
+from azure.ai.projects import AIProjectClient
+from azure.identity import DefaultAzureCredential
+from azure.ai.agents.models import ListSortOrder
+
 search_handler = SearchHandler()
 
 
@@ -15,6 +20,13 @@ class ChatHandler:
         self.llm = AzureChatOpenAI(
             azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"]
         )
+
+        self.project = AIProjectClient(
+            credential=DefaultAzureCredential(),
+            endpoint="https://ai-voice-innovation-resource.services.ai.azure.com/api/projects/ai_voice_innovation")
+        
+        self.agent = self.project.agents.get_agent("asst_xazGwVLrRw2uTOoEAEZJCJss")
+        self.thread = self.project.agents.threads.create()
     
     def trigger_api_post_request(self,url, payload):
         headers = {
@@ -80,26 +92,27 @@ class ChatHandler:
         # if any(bye in input_lower for bye in goodbyes):
         #     return SimpleNamespace(content="Goodbye! Thanks for your time.")
 
-        messages = self.parse_conversation(input_text)
-        search_response = search_handler.get_query_response(str(input_text))
+
+        message = self.project.agents.messages.create(
+            thread_id=self.thread.id,
+            role="user",
+            content=input_text
+        )
+
+        run = self.project.agents.runs.create_and_process(
+            thread_id=self.thread.id,
+            agent_id=self.agent.id)
         
-        prompt = ChatPromptTemplate.from_messages(
-                        [
-                            (
-                                "system",
-                                    """You are an experienced and efficient customer service agent; you are answering calls to customers about council tax registration on behalf of Islington Council.  
-                                        Please use any relevant documentation in the following: {information}.                                    """,
-                            )
-                        ] + messages
-                    )
+        messages = self.project.agents.messages.list(thread_id=self.thread.id, order=ListSortOrder.ASCENDING)
 
-        chain = prompt | self.llm
-        response = chain.invoke(
-                        {
-                            "information": search_response
-                        }
-                    )
 
-        return response.content
+        # messages = self.parse_conversation(input_text)
+        # search_response = search_handler.get_query_response(str(input_text))
+
+        for message in messages:
+            if message.text_messages:
+                response = message.text_messages[-1].text.value
+
+        return response
             
         # return response
