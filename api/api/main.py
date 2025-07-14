@@ -1,13 +1,14 @@
 import os
 import tempfile
 import dotenv
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, UploadFile, WebSocket, Request
 from pydantic import BaseModel
 
 from api.chat.chat_handler import ChatHandler
 from api.enrich.translation import TranslationHandler
 from api.enrich.audio_converter import AudioConverter
 from api.enrich.audio_transcriber import AudioTranscriber
+from api.telephony.simple_call_handler import SimpleTelephonyHandler
 import azure.cognitiveservices.speech as speechsdk
 
 
@@ -40,6 +41,7 @@ speech_config = speechsdk.SpeechConfig(
 
 audio_transcriber = AudioTranscriber(speech_config)
 translation_handler = TranslationHandler()
+telephony_handler = SimpleTelephonyHandler()
 
 @app.post("/api/process")
 async def process(request: ProcessRequest) -> ProcessResponse:
@@ -84,3 +86,10 @@ async def process_audio_file(request: ProcessRequest) -> AudioProcessResponse:
         speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
         speech_synthesizer.speak_text_async(response_content).get()
         return AudioProcessResponse(transcribed_audio=original_text, response=response_content)
+
+@app.post("/api/telephony/webhook")
+async def telephony_webhook(request: Request):
+    """Handle incoming telephony events"""
+    result = await telephony_handler.handle_incoming_call(request)
+    return result
+

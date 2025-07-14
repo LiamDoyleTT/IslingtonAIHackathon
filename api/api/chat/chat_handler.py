@@ -93,8 +93,8 @@ class ChatHandler:
                         ] + messages
                     )
 
-                    chain = prompt | self.llm
-                    response = chain.invoke(
+        chain = prompt | self.llm
+        response = chain.invoke(
                         {
                             "information": search_response
                         }
